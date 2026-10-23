@@ -33,8 +33,10 @@ For a meaningful winner for `cl`, run it from a *Developer PowerShell for Visual
 
 Then change something small — prepend a different Python's folder to `PATH` in a new session — and run Check again: it should name the tool, show the before/after winners, and exit 2.
 
-## One invocation rule that matters
+## Exit-code behavior (v0.1.1)
 
-Run ResolveLock **directly** — as the command itself (`.\ResolveLock.ps1 …`), as a CI step's own command, or as a child process (`powershell -File ResolveLock.ps1 …`).
+Since v0.1.1, Check signals drift with `[Environment]::Exit(2)`, which terminates the host process with code 2 in **every** invocation mode — directly, as a CI step's own command, as a child process (`powershell -File ResolveLock.ps1 …`), and nested from another script with `& .\ResolveLock.ps1 …`. (v0.1.0 used the `exit` keyword; nested, that ended only the called script and the caller exited 0 despite the drift report — observed on PowerShell 7.4, regression-tested fixed for 0.1.1 in the simulated environment.)
 
-Do not call it from inside another PowerShell script with `& .\ResolveLock.ps1 …` when you depend on its exit code. In testing on PowerShell 7.4, a nested `&` invocation printed the drift report correctly but the caller's process still exited 0 — the `exit 2` ends the called script, not the host, in that arrangement. Whether Windows PowerShell 5.1 behaves the same when nested is part of what the on-machine run above confirms; the direct invocation is verified to exit 2.
+One consequence to know before the interactive run: because the process terminates, running Check interactively in your own session will **end that session** when drift is found. The self-test above is unaffected (it runs ResolveLock as a child process throughout). If you run Check by hand interactively and want the session to stay open, run it as a child: `powershell -File .\ResolveLock.ps1 -Mode Check -File .\toolchain.lock.json`, then read `$LASTEXITCODE`.
+
+What the on-machine run confirms for 5.1 specifically: that `[Environment]::Exit(2)` surfaces as process exit code 2 under Windows PowerShell 5.1 in both the direct and nested arrangements, exactly as the self-test asserts.
