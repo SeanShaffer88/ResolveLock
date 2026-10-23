@@ -8,11 +8,11 @@ Your build uses whatever compiler, SDK tool, or Python your computer happens to 
 
 There is nothing to build and nothing to install — ResolveLock is the single file `ResolveLock.ps1`.
 
-1. Download `ResolveLock.ps1` from the [v0.1.0 release](https://github.com/SeanShaffer88/ResolveLock/releases/tag/v0.1.0), or copy it from this repository.
-2. Check the download (optional but recommended). The v0.1.0 script's SHA-256 is:
+1. Download `ResolveLock.ps1` from the [v0.1.1 release](https://github.com/SeanShaffer88/ResolveLock/releases/tag/v0.1.1), or copy it from this repository.
+2. Check the download (optional but recommended). The v0.1.1 script's SHA-256 is:
 
    ```
-   a37cec356e1fdb854c3fd3728ce984f0f05d6bf3d3fc1b261329389dbc608cbd
+   f24868bf0eae71203f78c93defcd47a11234fae747009efade438f7da2e704b7
    ```
 
    ```powershell
@@ -193,7 +193,7 @@ Separately, the script itself parses with zero errors under the PowerShell parse
 - **`Use a command name, not a path: …`** — `-Tools` takes names like `python`, not `C:\Python312\python.exe`.
 - **`Unsupported ResolveLock format in …`** — the lockfile's format version is not 1; re-capture it with this version of the script.
 - **Exit code 2 in CI.** — that is Check working as intended: something resolved differently from the lockfile. The output names the tool and shows the before/after winners and `PATH` matches. If the change is intentional, re-capture the lockfile and commit the new one.
-- **Drift is printed but the CI step still passes.** — invoke ResolveLock *directly* (as the step's own command, or as a child process via `powershell -File ResolveLock.ps1 …`), not nested inside another script with `& .\ResolveLock.ps1 …`. Observed on PowerShell 7.4: a nested `&` call printed the drift report but the calling process still exited 0, because `exit 2` ends the called script in that arrangement. Details in [VERIFY.md](VERIFY.md).
+- **Drift is printed but the CI step still passes (v0.1.0 only).** — 0.1.0 signaled drift with the `exit` keyword, which — when the script is invoked nested from another script with `& .\ResolveLock.ps1 …` — ended only the called script and let the caller exit 0 (observed on PowerShell 7.4). **Fixed in v0.1.1:** Check now uses `[Environment]::Exit(2)`, which terminates the host process with code 2 in every invocation mode; a nested clean Check still returns control to the caller normally. One consequence: running Check interactively in your own session ends that session when drift is found — run it as a child process (`powershell -File ResolveLock.ps1 -Mode Check …`) if you want the session to stay open.
 - **PowerShell refuses to run the script at all** — your execution policy is blocking local scripts. Run it in a session with a policy that allows it, for example `powershell -ExecutionPolicy Bypass -File .\ResolveLock.ps1 -Mode Capture -File .\toolchain.lock.json`, or set a policy you are comfortable with. (Changing execution policy is a machine setting — your call, not this tool's.)
 
 ## Privacy
@@ -209,7 +209,7 @@ The lockfile contains local executable paths and hashes. Paths can reveal user n
 
 ## Verification status
 
-- **Verified:** the script parses with zero errors under the PowerShell parser; the PE-architecture reader and file hashing pass the smoke test in `tests/` (synthetic x64 / x86 / non-PE files); the published v0.1.0 release asset's SHA-256 matches the script in this repository. The complete Capture → Check cycle also passes end to end in a simulated Windows environment (PowerShell 7.4 on Linux, Windows-style `PATH`/`PATHEXT` with synthetic PE tools): Capture wrote a correct format-1 lockfile with hashes and architectures, a clean Check exited 0, a tampered lockfile and a swapped tool file were both reported as drift, and a direct `powershell -File` Check exited exactly 2. The on-machine test script (`tests/Test-OnMachine.ps1`) passes all five of its checks in that same simulated environment.
+- **Verified:** the script parses with zero errors under the PowerShell parser; the PE-architecture reader and file hashing pass the smoke test in `tests/` (synthetic x64 / x86 / non-PE files); each published release asset's SHA-256 matches the script in this repository. The complete Capture → Check cycle also passes end to end in a simulated Windows environment (PowerShell 7.4 on Linux, Windows-style `PATH`/`PATHEXT` with synthetic PE tools): Capture wrote a correct format-1 lockfile with hashes and architectures, a clean Check exited 0, a tampered lockfile and a swapped tool file were both reported as drift, and a direct `powershell -File` Check exited exactly 2. For v0.1.1 the nested-invocation regression is verified fixed in that environment: a wrapper script calling Check with `&` on a tampered lockfile now terminates with exit 2 (v0.1.0 exited 0), and a nested clean Check still returns control to the caller with exit 0. The on-machine test script (`tests/Test-OnMachine.ps1`) passes all five of its checks in that same simulated environment.
 - **To be confirmed:** a full `Capture` → `Check` run on a real Windows machine under Windows PowerShell 5.1 — the simulated run cannot prove 5.1 or real-Windows behavior (for example, its `Get-Command` winner was not exercised). [VERIFY.md](VERIFY.md) makes this a three-minute job.
 
 ## License
