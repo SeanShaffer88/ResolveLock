@@ -247,6 +247,11 @@ else {
         }
     }
 
-    if ($changed) { exit 2 }
+    # [Environment]::Exit, not the exit keyword: when this script is invoked
+    # nested from another script (the & operator), exit ends only this script
+    # and the caller continues with exit code 0 — observed on PowerShell 7.4,
+    # which would silently pass a CI check that found drift. Environment.Exit
+    # terminates the host process with the code in every invocation mode.
+    if ($changed) { [Environment]::Exit(2) }
     Write-Host 'No tool-resolution drift detected.'
 }
