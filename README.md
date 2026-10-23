@@ -159,6 +159,8 @@ A tool that is not found gets `"Winner": null` and an empty `PathMatches` list. 
 ```
 ResolveLock.ps1                  the whole tool — one file
 tests/Test-PeArchitecture.ps1    smoke test for the PE-architecture reader
+tests/Test-OnMachine.ps1         full Capture/Check verification — run on Windows
+VERIFY.md                        how to run the on-machine verification
 README.md                        this file
 CHANGELOG.md                     release history
 LICENSE                          MIT license
@@ -176,7 +178,13 @@ powershell -ExecutionPolicy Bypass -File .\tests\Test-PeArchitecture.ps1
 
 Expected result: five `PASS:` lines and `All tests passed.`
 
-Separately, the script itself parses with zero errors under the PowerShell parser. A full Capture → Check run on a real Windows machine under Windows PowerShell 5.1 is **to be confirmed** — see Verification status.
+The full end-to-end test is `tests/Test-OnMachine.ps1` — see [VERIFY.md](VERIFY.md). It runs ResolveLock as a direct child process and checks Capture (exit 0, format-1 lockfile), Check with no drift (exit 0), Check against a tampered lockfile (drift reported, exit 2), and Check with a missing lockfile (fails). Run it on Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\Test-OnMachine.ps1
+```
+
+Separately, the script itself parses with zero errors under the PowerShell parser, and the complete Capture → Check cycle — including the tamper test — passes in a simulated Windows environment under PowerShell 7.4 (see Verification status). A run on a real Windows machine under Windows PowerShell 5.1 is **to be confirmed**.
 
 ## Troubleshooting
 
@@ -185,6 +193,7 @@ Separately, the script itself parses with zero errors under the PowerShell parse
 - **`Use a command name, not a path: …`** — `-Tools` takes names like `python`, not `C:\Python312\python.exe`.
 - **`Unsupported ResolveLock format in …`** — the lockfile's format version is not 1; re-capture it with this version of the script.
 - **Exit code 2 in CI.** — that is Check working as intended: something resolved differently from the lockfile. The output names the tool and shows the before/after winners and `PATH` matches. If the change is intentional, re-capture the lockfile and commit the new one.
+- **Drift is printed but the CI step still passes.** — invoke ResolveLock *directly* (as the step's own command, or as a child process via `powershell -File ResolveLock.ps1 …`), not nested inside another script with `& .\ResolveLock.ps1 …`. Observed on PowerShell 7.4: a nested `&` call printed the drift report but the calling process still exited 0, because `exit 2` ends the called script in that arrangement. Details in [VERIFY.md](VERIFY.md).
 - **PowerShell refuses to run the script at all** — your execution policy is blocking local scripts. Run it in a session with a policy that allows it, for example `powershell -ExecutionPolicy Bypass -File .\ResolveLock.ps1 -Mode Capture -File .\toolchain.lock.json`, or set a policy you are comfortable with. (Changing execution policy is a machine setting — your call, not this tool's.)
 
 ## Privacy
@@ -200,8 +209,8 @@ The lockfile contains local executable paths and hashes. Paths can reveal user n
 
 ## Verification status
 
-- **Verified:** the script parses with zero errors under the PowerShell parser; the PE-architecture reader and file hashing pass the smoke test in `tests/` (synthetic x64 / x86 / non-PE files); the published v0.1.0 release asset's SHA-256 matches the script in this repository.
-- **To be confirmed:** a full `Capture` → `Check` run on a real Windows machine under Windows PowerShell 5.1.
+- **Verified:** the script parses with zero errors under the PowerShell parser; the PE-architecture reader and file hashing pass the smoke test in `tests/` (synthetic x64 / x86 / non-PE files); the published v0.1.0 release asset's SHA-256 matches the script in this repository. The complete Capture → Check cycle also passes end to end in a simulated Windows environment (PowerShell 7.4 on Linux, Windows-style `PATH`/`PATHEXT` with synthetic PE tools): Capture wrote a correct format-1 lockfile with hashes and architectures, a clean Check exited 0, a tampered lockfile and a swapped tool file were both reported as drift, and a direct `powershell -File` Check exited exactly 2. The on-machine test script (`tests/Test-OnMachine.ps1`) passes all five of its checks in that same simulated environment.
+- **To be confirmed:** a full `Capture` → `Check` run on a real Windows machine under Windows PowerShell 5.1 — the simulated run cannot prove 5.1 or real-Windows behavior (for example, its `Get-Command` winner was not exercised). [VERIFY.md](VERIFY.md) makes this a three-minute job.
 
 ## License
 
